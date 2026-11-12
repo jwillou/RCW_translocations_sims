@@ -68,6 +68,7 @@ minimum_pooled_minor_allele_frequency <- 0
 
 write_output_files <- TRUE
 make_summary_plot <- TRUE
+setwd = "/Users/jannawilloughby/Google Drive/My Drive/Willoughby lab/projects - active/red cockaded woodpecker/RCW GBS data analysis/RCW_translocations_sims/"
 output_parent <- getwd()            # Outputs go beneath the current R folder.
 run_name <- paste0("RCW_simulation_", format(Sys.time(), "%Y%m%d_%H%M%S"))
 
