@@ -68,7 +68,7 @@ minimum_pooled_minor_allele_frequency <- 0
 
 write_output_files <- TRUE
 make_summary_plot <- TRUE
-setwd = "/Users/jannawilloughby/Google Drive/My Drive/Willoughby lab/projects - active/red cockaded woodpecker/RCW GBS data analysis/RCW_translocations_sims/"
+setwd("/Users/jannawilloughby/Google Drive/My Drive/Willoughby lab/projects - active/red cockaded woodpecker/RCW GBS data analysis/RCW_translocations_sims/")
 output_parent <- getwd()            # Outputs go beneath the current R folder.
 run_name <- paste0("RCW_simulation_", format(Sys.time(), "%Y%m%d_%H%M%S"))
 
@@ -395,7 +395,7 @@ if (write_output_files) {
 
 ### PLOT ###
 source_fractions <- c(0, 0.5, 1)
-source_colors <- c("#59636E", "#0072B2", "#D55E00")
+source_colors <- c("#59636E", "mediumpurple3", "purple3")
 source_symbols <- c(16, 17, 15)
 source_lines <- c(3, 1, 1)
 
@@ -536,7 +536,7 @@ if (make_summary_plot) {
   
   if (nrow(plot_data) > 0) {
     plot_ne_values <- sort(unique(plot_data$Ne))
-    plot_colors <- rep(c("#0072B2", "#D55E00", "#009E73", "#CC79A7"),
+    plot_colors <- rep(c("thistle3", "mediumpurple3", "purple3", "purple4"),
                        length.out = length(plot_ne_values))
     plot_symbols <- rep(c(16, 17, 15, 18), length.out = length(plot_ne_values))
     
@@ -597,13 +597,4 @@ if (make_summary_plot) {
   }
 }
 
-# INTERPRETATION
-# Compare source fractions WITHIN a demographic/distribution combination.
-# Replicates are independent, not paired across source scenarios.
-# A value inside a simulation interval is compatible with those assumptions;
-# it is not proof of the actual history and is not an estimated migration rate.
-# n_loci counts generated loci. Filters and loss of variation can reduce the
-# number retained, which is recorded for every replicate. The simulated interval
-# assumes independent loci and may be too narrow if empirical loci are linked.
-# Before manuscript use, replace demo sample/locus counts, match the empirical
-# estimator and ascertainment, and update the Methods to describe what was run.
+
