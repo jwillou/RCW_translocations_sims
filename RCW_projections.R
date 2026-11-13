@@ -692,5 +692,220 @@ for (site in sites_to_plot) for (fraction in outside_to_plot) {
 }
 
 
+#### SUPPLEMENTARY PROJECTION FIGURES ####
+#if reloading needed run
+#saved <- readRDS("~/Library/CloudStorage/GoogleDrive-janna.willoughby@gmail.com/My Drive/Willoughby lab/projects - active/red cockaded woodpecker/RCW GBS data analysis/RCW_translocations_sims/RCW_annual_projection_20261112_101721/projection_results.rds")
+#summary_results <- saved$summary
+#comparisons <- saved$results
+
+#### SETTINGS AND SAVED RESULTS ####
+supp_rates <- c(1, 15, 25, 50)
+supp_outside <- c(0, 0.10, 0.20)
+supp_years <- c(20, 50, 100) # Retained in the paired-results CSV, not separate plots
+supp_endpoint <- 100
+supp_trajectory_budget <- 25
+supp_ps3_outside <- 0.20
+supp_sites <- c("TallTimbers", "LivingstonPlace")
+supp_site_labels <- c(TallTimbers = "Tall Timbers", LivingstonPlace = "Livingston Place")
+supp_site_colors <- c(TallTimbers = "dodgerblue3", LivingstonPlace = "firebrick3")
+supp_guided_colors <- c(TallTimbers = "dodgerblue4", LivingstonPlace = "firebrick4")
+supp_policies <- c("random_exchange", "relatedness_guided")
+supp_policy_labels <- c("Random", "Relatedness-guided (benchmark)")
+supp_band_alpha <- 0.08
+supp_directory <- file.path(if (exists("output_directory")) output_directory else getwd(), "supplementary_compact")
+dir.create(supp_directory, recursive = TRUE, showWarnings = FALSE)
+
+# In a fresh session, first read projection_results.rds into saved with readRDS().
+if (exists("saved") && all(c("results", "summary") %in% names(saved))) {
+  supp_summary <- saved$summary
+  supp_raw <- saved$results
+} else {
+  stopifnot(exists("summary_results"), exists("comparisons"))
+  supp_summary <- summary_results
+  supp_raw <- comparisons
+}
+supp_raw <- supp_raw[, c("replicate", "year", "population", "strategy", "swaps_per_generation", "outside_fraction", "mate_kinship", "imported_chicks", "moved_next_breeders")]
+
+#### PS1: TRAJECTORIES AT A SINGLE EXCHANGE BUDGET ####
+ps1_budget <- supp_trajectory_budget
+ps1_outside <- supp_outside
+ps1_sites <- c("TallTimbers", "LivingstonPlace")
+ps1_site_labels <- c(TallTimbers = "Tall Timbers", LivingstonPlace = "Livingston Place")
+ps1_colors <- c(TallTimbers = "dodgerblue3", LivingstonPlace = "firebrick3")
+ps1_metrics <- c("mate_kinship", "expected_offspring_H")
+ps1_ylabels <- c(mate_kinship = "Expected offspring inbreeding", expected_offspring_H = "Expected offspring heterozygosity")
+ps1_summary <- supp_summary
+
+ps1_data <- ps1_summary[ps1_summary$population %in% ps1_sites & (ps1_summary$strategy == "no_exchange" | (ps1_summary$strategy == "random_exchange" & ps1_summary$swaps_per_generation == ps1_budget & ps1_summary$outside_fraction %in% ps1_outside)), ]
+stopifnot(all(c("no_exchange", "random_exchange") %in% ps1_data$strategy))
+ps1_curves <- data.frame(strategy = c("no_exchange", rep("random_exchange", length(ps1_outside))), outside = c(0, ps1_outside), lty = c(1, 1, 3, 2), label = c("No exchange", "Random: TT-LP only", "Random: 10% outside", "Random: 20% outside"))
+# Match the main figures: 0% outside is solid and 20% outside is dashed.
+# The additional 10% scenario is dotted. Outside fractions are scenario settings.
+
+pdf(file.path(supp_directory, "PS1_trajectories.pdf"), width = 10, height = 10, useDingbats = FALSE)
+par(mfrow = c(2, 2))
+ps1_panel <- 0
+for (metric in ps1_metrics) {
+  # Common y-axis limits across the two populations for each outcome.
+  limits <- unlist(ps1_data[, paste0(metric, c("_lower_95", "_upper_95"))], use.names = FALSE)
+  limits <- limits[is.finite(limits)]
+  stopifnot(length(limits) > 0)
+  ylimits <- range(limits); padding <- max(diff(ylimits) * 0.05, 0.005)
+  ylimits <- ylimits + c(-padding, padding)
+  for (site in ps1_sites) {
+    ps1_panel <- ps1_panel + 1
+    a <- ps1_data[ps1_data$population == site, ]
+    stopifnot(any(a$strategy == "no_exchange"))
+    stopifnot(all(ps1_outside %in% a$outside_fraction[a$strategy == "random_exchange"]))
+    colors <- c("#59636E", rep(unname(ps1_colors[site]), length(ps1_outside)))
+    par(mar = c(4.7, 4.9, 4.0, 1), mgp = c(3.0, 0.8, 0), las = 1, cex = 0.85)
+    plot(NA, xlim = range(a$year), ylim = ylimits, xlab = "Year", ylab = ps1_ylabels[metric])
+    title(main = paste0(LETTERS[ps1_panel], ". ", ps1_site_labels[site]), line = 2, cex.main = 1.1)
+    mtext(paste0(ps1_budget, " reciprocal swaps per 5-year window"), side = 3, line = 0.5, cex = 0.8)
+    for (layer in c("band", "line")) for (j in seq_len(nrow(ps1_curves))) {
+      b <- a[a$strategy == ps1_curves$strategy[j] & a$outside_fraction == ps1_curves$outside[j], ]
+      b <- b[order(b$year), ]
+      x <- b$year; middle <- b[[paste0(metric, "_median")]]
+      lower <- b[[paste0(metric, "_lower_95")]]; upper <- b[[paste0(metric, "_upper_95")]]
+      if (layer == "band") {
+        ok <- which(is.finite(lower) & is.finite(upper))
+        runs <- if (length(ok)) split(ok, cumsum(c(TRUE, diff(ok) != 1))) else list()
+        for (k in runs) if (length(k) >= 2) polygon(c(x[k], rev(x[k])), c(lower[k], rev(upper[k])), col = adjustcolor(colors[j], alpha.f = 0.08), border = NA)
+      } else lines(x, middle, col = colors[j], lty = ps1_curves$lty[j], lwd = 2)
+    }
+    legend("topleft", legend = ps1_curves$label, col = colors, lty = ps1_curves$lty, lwd = 2, bty = "n", cex = 0.73)
+  }
+}
+dev.off()
+# A/B: expected inbreeding at TT/LP. C/D: expected heterozygosity at TT/LP.
+
+#### PS2: PAIRED BENEFITS OF GUIDANCE ####
+supp_keys <- c("replicate", "year", "population", "swaps_per_generation", "outside_fraction")
+a <- supp_raw[supp_raw$strategy == "random_exchange" & supp_raw$year %in% supp_years & supp_raw$population %in% supp_sites & supp_raw$swaps_per_generation %in% supp_rates & supp_raw$outside_fraction %in% supp_outside, c(supp_keys, "mate_kinship")]
+b <- supp_raw[supp_raw$strategy == "relatedness_guided" & supp_raw$year %in% supp_years & supp_raw$population %in% supp_sites & supp_raw$swaps_per_generation %in% supp_rates & supp_raw$outside_fraction %in% supp_outside, c(supp_keys, "mate_kinship")]
+stopifnot(!anyDuplicated(a[, supp_keys]), !anyDuplicated(b[, supp_keys]))
+supp_guidance_pairs <- merge(a, b, by = supp_keys, suffixes = c("_random", "_guided"))
+supp_guidance_pairs$guidance_benefit <- supp_guidance_pairs$mate_kinship_random - supp_guidance_pairs$mate_kinship_guided
+
+supp_guidance_summary <- expand.grid(population = supp_sites, outside_fraction = supp_outside, year = supp_years, swaps_per_generation = supp_rates, stringsAsFactors = FALSE)
+for (column in c("n_valid", "median", "lower_95", "upper_95", "fraction_guidance_better")) supp_guidance_summary[[column]] <- NA_real_
+for (i in seq_len(nrow(supp_guidance_summary))) {
+  a <- supp_guidance_summary[i, ]
+  values <- supp_guidance_pairs$guidance_benefit[supp_guidance_pairs$population == a$population & supp_guidance_pairs$outside_fraction == a$outside_fraction & supp_guidance_pairs$year == a$year & supp_guidance_pairs$swaps_per_generation == a$swaps_per_generation]
+  values <- values[is.finite(values)]
+  supp_guidance_summary$n_valid[i] <- length(values)
+  if (length(values)) {
+    supp_guidance_summary[i, c("median", "lower_95", "upper_95")] <- as.list(quantile(values, c(0.5, 0.025, 0.975), names = FALSE))
+    supp_guidance_summary$fraction_guidance_better[i] <- mean(values > 0)
+  }
+}
+write.csv(supp_guidance_pairs, file.path(supp_directory, "PS2_paired_guidance_results.csv"), row.names = FALSE)
+write.csv(supp_guidance_summary, file.path(supp_directory, "PS2_guidance_summary.csv"), row.names = FALSE)
+
+supp_guidance_plot <- supp_guidance_summary[supp_guidance_summary$year == supp_endpoint, ]
+all_limits <- unlist(supp_guidance_plot[, c("lower_95", "upper_95")], use.names = FALSE)
+ylimits <- range(c(0, all_limits[is.finite(all_limits)]))
+padding <- max(diff(ylimits) * 0.08, 0.005); ylimits <- ylimits + c(-padding, padding)
+supp_source_labels <- c("TT-LP only", "10% outside", "20% outside")
+supp_source_lty <- c(1, 3, 2)
+pdf(file.path(supp_directory, "PS2_guidance.pdf"), width = 10, height = 5, useDingbats = FALSE)
+par(mfrow = c(1, 2))
+for (site_index in seq_along(supp_sites)) {
+  site <- supp_sites[site_index]
+  color <- unname(supp_guided_colors[site]); x <- seq_along(supp_rates)
+  par(mar = c(4.7, 5.3, 4.1, 1), mgp = c(3.4, 0.8, 0), las = 1, cex = 0.85)
+  plot(NA, xlim = c(0.8, length(x) + 0.2), ylim = ylimits, xaxt = "n", xlab = "Reciprocal swaps per 5-year window", ylab = "Additional reduction in expected inbreeding")
+  axis(1, at = x, labels = supp_rates)
+  title(main = paste0(LETTERS[site_index], ". ", supp_site_labels[site]), line = 2, cex.main = 1.1)
+  mtext(paste0("Year ", supp_endpoint, "; random minus relatedness-guided"), side = 3, line = 0.5, cex = 0.8)
+  abline(h = 0, col = "grey55", lty = 3)
+  for (layer in c("band", "line")) for (j in seq_along(supp_outside)) {
+    a <- supp_guidance_plot[supp_guidance_plot$population == site & supp_guidance_plot$outside_fraction == supp_outside[j], ]
+    a <- a[match(supp_rates, a$swaps_per_generation), ]
+    if (layer == "band") {
+      ok <- which(is.finite(a$lower_95) & is.finite(a$upper_95))
+      runs <- if (length(ok)) split(ok, cumsum(c(TRUE, diff(ok) != 1))) else list()
+      for (k in runs) if (length(k) >= 2) polygon(c(x[k], rev(x[k])), c(a$lower_95[k], rev(a$upper_95[k])), col = adjustcolor(color, alpha.f = supp_band_alpha), border = NA)
+    } else {
+      lines(x, a$median, col = color, lwd = 2, lty = supp_source_lty[j]); points(x, a$median, col = color, pch = c(16, 17, 15)[j])
+    }
+  }
+  legend("topleft", legend = supp_source_labels, col = color, lty = supp_source_lty, lwd = 2, pch = c(16, 17, 15), bty = "n", cex = 0.73)
+}
+dev.off()
+
+#### PS3: RECRUITMENT AND EXTERNAL GENETIC CONTRIBUTIONS ####
+# Recruitment is pooled over years WITHIN each replicate before calculating intervals.
+# moved_next_breeders counts exchanged chicks entering the next breeding pool.
+# Do not average annual recruitment fractions or count repeated adult survival as recruitment.
+a <- supp_raw[supp_raw$strategy %in% supp_policies & supp_raw$year > 0 & supp_raw$year <= supp_endpoint & supp_raw$population %in% supp_sites & supp_raw$swaps_per_generation %in% supp_rates & supp_raw$outside_fraction %in% supp_outside, ]
+supp_recruitment <- aggregate(a[, c("imported_chicks", "moved_next_breeders")], by = a[, c("replicate", "population", "strategy", "swaps_per_generation", "outside_fraction")], FUN = sum)
+supp_recruitment$recruitment_fraction <- with(supp_recruitment, ifelse(imported_chicks > 0, moved_next_breeders / imported_chicks, NA_real_))
+write.csv(supp_recruitment, file.path(supp_directory, "PS3_recruitment_by_replicate.csv"), row.names = FALSE)
+
+supp_recruitment_summary <- expand.grid(population = supp_sites, strategy = supp_policies, outside_fraction = supp_outside, swaps_per_generation = supp_rates, stringsAsFactors = FALSE)
+for (column in c("n_valid", "median", "lower_95", "upper_95", "pooled_fraction")) supp_recruitment_summary[[column]] <- NA_real_
+for (i in seq_len(nrow(supp_recruitment_summary))) {
+  a <- supp_recruitment_summary[i, ]
+  b <- supp_recruitment[supp_recruitment$population == a$population & supp_recruitment$strategy == a$strategy & supp_recruitment$outside_fraction == a$outside_fraction & supp_recruitment$swaps_per_generation == a$swaps_per_generation, ]
+  values <- b$recruitment_fraction[is.finite(b$recruitment_fraction)]
+  supp_recruitment_summary$n_valid[i] <- length(values)
+  if (length(values)) supp_recruitment_summary[i, c("median", "lower_95", "upper_95")] <- as.list(quantile(values, c(0.5, 0.025, 0.975), names = FALSE))
+  if (sum(b$imported_chicks) > 0) supp_recruitment_summary$pooled_fraction[i] <- sum(b$moved_next_breeders) / sum(b$imported_chicks)
+}
+write.csv(supp_recruitment_summary, file.path(supp_directory, "PS3_recruitment_summary.csv"), row.names = FALSE)
+
+# Combine the recruitment summaries with endpoint allele-retention and ancestry summaries.
+# "New alleles" means absent from the COMBINED initial TT + LP sample, not newly mutated.
+# External ancestry means ancestry from arrivals during the simulation, not historical ancestry.
+supp_ps3 <- supp_recruitment_summary[, c("population", "strategy", "outside_fraction", "swaps_per_generation", "n_valid", "median", "lower_95", "upper_95")]
+supp_ps3$metric <- "recruitment_fraction"
+for (metric in c("new_alleles_retained", "mean_external_ancestry")) {
+  a <- supp_summary[supp_summary$year == supp_endpoint & supp_summary$population %in% supp_sites & supp_summary$strategy %in% supp_policies & supp_summary$swaps_per_generation %in% supp_rates & supp_summary$outside_fraction %in% supp_outside, c("population", "strategy", "outside_fraction", "swaps_per_generation", paste0(metric, c("_n_valid", "_median", "_lower_95", "_upper_95")))]
+  names(a)[5:8] <- c("n_valid", "median", "lower_95", "upper_95")
+  a$metric <- metric
+  supp_ps3 <- rbind(supp_ps3, a)
+}
+write.csv(supp_ps3, file.path(supp_directory, "PS3_panel_summaries.csv"), row.names = FALSE)
+
+supp_ps3_labels <- c(recruitment_fraction = "Exchanged chicks recruiting (%)", new_alleles_retained = "Retained alleles absent from initial TT + LP", mean_external_ancestry = "Ancestry from simulated external arrivals (%)")
+supp_ps3_plot <- supp_ps3[supp_ps3$outside_fraction == supp_ps3_outside, ]
+pdf(file.path(supp_directory, "PS3_recruitment_and_external_contributions.pdf"), width = 10, height = 15, useDingbats = FALSE)
+par(mfrow = c(3, 2))
+supp_panel <- 0
+for (metric in unique(supp_ps3_plot$metric)) {
+  scale_factor <- if (metric == "new_alleles_retained") 1 else 100
+  all_limits <- supp_ps3_plot$upper_95[supp_ps3_plot$metric == metric] * scale_factor
+  all_limits <- all_limits[is.finite(all_limits)]
+  ymax <- if (length(all_limits)) max(all_limits) else 0
+  ylimits <- c(0, max(ymax * 1.12, if (scale_factor == 100) 1 else 5))
+  for (site in supp_sites) {
+    supp_panel <- supp_panel + 1
+    outside <- supp_ps3_outside
+    a <- supp_ps3_plot[supp_ps3_plot$population == site & supp_ps3_plot$metric == metric, ]
+    colors <- c(unname(supp_site_colors[site]), unname(supp_guided_colors[site]))
+    x <- seq_along(supp_rates)
+    par(mar = c(4.7, 5.3, 4.1, 1), mgp = c(3.4, 0.8, 0), las = 1, cex = 0.85)
+    plot(NA, xlim = c(0.8, length(x) + 0.2), ylim = ylimits, xaxt = "n", xlab = "Reciprocal swaps per 5-year window", ylab = supp_ps3_labels[metric])
+    axis(1, at = x, labels = supp_rates)
+    title(main = paste0(LETTERS[supp_panel], ". ", supp_site_labels[site]), line = 2, cex.main = 1.05)
+    timing <- if (metric == "recruitment_fraction") sprintf("Years 1-%d", supp_endpoint) else sprintf("Year %d", supp_endpoint)
+    mtext(sprintf("%s; %g%% outside exchanges", timing, 100 * outside), side = 3, line = 0.5, cex = 0.85)
+    for (layer in c("band", "line")) for (j in seq_along(supp_policies)) {
+      b <- a[a$strategy == supp_policies[j], ]; b <- b[match(supp_rates, b$swaps_per_generation), ]
+      middle <- b$median * scale_factor; lower <- b$lower_95 * scale_factor; upper <- b$upper_95 * scale_factor
+      if (layer == "band") {
+        ok <- which(is.finite(lower) & is.finite(upper))
+        runs <- if (length(ok)) split(ok, cumsum(c(TRUE, diff(ok) != 1))) else list()
+        for (k in runs) if (length(k) >= 2) polygon(c(x[k], rev(x[k])), c(lower[k], rev(upper[k])), col = adjustcolor(colors[j], alpha.f = supp_band_alpha), border = NA)
+      } else {
+        lines(x, middle, col = colors[j], lwd = 2, lty = if (outside == 0) 1 else 2); points(x, middle, col = colors[j], pch = c(16, 17)[j])
+      }
+    }
+    legend("topleft", legend = supp_policy_labels, col = colors, lty = if (outside == 0) 1 else 2, lwd = 2, pch = c(16, 17), bty = "n", cex = 0.73)
+  }
+}
+
+dev.off()
 
 
